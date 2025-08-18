@@ -105,9 +105,24 @@
                     if (contactsError) throw contactsError;
                     if (onboardingError) throw onboardingError;
 
+                    // Sort the data to find the latest entry
+                    const sortedContacts = [...contactsData].sort((a, b) => {
+                      if (a.created_at && b.created_at) {
+                        return new Date(b.created_at) - new Date(a.created_at);
+                      }
+                      return b.id - a.id;
+                    });
+                    const sortedOnboarding = [...onboardingData].sort((a, b) => {
+                       if (a.created_at && b.created_at) {
+                        return new Date(b.created_at) - new Date(a.created_at);
+                      }
+                      return b.id - a.id;
+                    });
+
+
                     // Update state with the fetched data
-                    setContacts(contactsData);
-                    setOnboardingData(onboardingData);
+                    setContacts(sortedContacts);
+                    setOnboardingData(sortedOnboarding);
 
                 } catch (err) {
                     console.error('Error fetching data:', err);
@@ -129,21 +144,28 @@
                 fetchData();
             }, []);
 
-            // Helper function to render data cards
+            // Helper function to render data cards with a highlight for the latest entry
             const renderCard = (title, data) => (
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 w-full">
                     <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">{title}</h3>
                     <div className="space-y-4">
                         {data.length > 0 ? (
-                            data.map((item, index) => (
-                                <div key={index} className="bg-gray-50 dark:bg-gray-700 p-4 rounded-xl border border-gray-100 dark:border-gray-600">
-                                    {Object.entries(item).map(([key, value]) => (
-                                        <p key={key} className="text-sm text-gray-700 dark:text-gray-300">
-                                            <span className="font-medium capitalize text-gray-800 dark:text-gray-200">{key}:</span> {value}
-                                        </p>
-                                    ))}
-                                </div>
-                            ))
+                            data.map((item, index) => {
+                                const isLatest = index === 0;
+                                return (
+                                    <div 
+                                        key={item.id || index} 
+                                        className={`p-4 rounded-xl border border-gray-100 dark:border-gray-600 transition-all duration-300
+                                                    ${isLatest ? 'bg-blue-100 dark:bg-blue-900 shadow-md transform scale-[1.02] border-blue-400 dark:border-blue-600' : 'bg-gray-50 dark:bg-gray-700'}`}
+                                    >
+                                        {Object.entries(item).map(([key, value]) => (
+                                            <p key={key} className="text-sm text-gray-700 dark:text-gray-300">
+                                                <span className="font-medium capitalize text-gray-800 dark:text-gray-200">{key}:</span> {value}
+                                            </p>
+                                        ))}
+                                    </div>
+                                );
+                            })
                         ) : (
                             <p className="text-center text-gray-500 dark:text-gray-400">No data available.</p>
                         )}
