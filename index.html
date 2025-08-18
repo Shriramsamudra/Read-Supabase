@@ -35,6 +35,37 @@
         
         const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+        class ErrorBoundary extends React.Component {
+            constructor(props) {
+                super(props);
+                this.state = { hasError: false, error: null };
+            }
+
+            static getDerivedStateFromError(error) {
+                return { hasError: true, error: error.message };
+            }
+
+            componentDidCatch(error, errorInfo) {
+                // You can also log the error to an error reporting service
+                console.error("Uncaught error:", error, errorInfo);
+            }
+
+            render() {
+                if (this.state.hasError) {
+                    // You can render any custom fallback UI
+                    return (
+                        <div className="flex flex-col items-center justify-center p-8 text-center text-red-500">
+                            <h2 className="text-xl font-bold mb-4">Something went wrong.</h2>
+                            <p className="font-mono text-sm break-all">{this.state.error}</p>
+                            <p className="mt-4">Please check the browser console for more details.</p>
+                        </div>
+                    );
+                }
+
+                return this.props.children;
+            }
+        }
+
         const App = () => {
           const [contacts, setContacts] = React.useState([]);
           const [onboardingData, setOnboardingData] = React.useState([]);
@@ -136,7 +167,12 @@
 
         const container = document.getElementById('app');
         const root = ReactDOM.createRoot(container);
-        root.render(React.createElement(App));
+        
+        root.render(
+            <ErrorBoundary>
+                <App />
+            </ErrorBoundary>
+        );
     </script>
 </body>
 </html>
