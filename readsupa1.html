@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>Supabase Data Reader</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Tailwind CDN for styling (Optional: Remove or replace if not needed) -->
+  <!-- Tailwind CDN for styling (for quick demo, use PostCSS or CLI for production) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Supabase JS CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -38,17 +38,10 @@
   </div>
 
   <script>
-    // Supabase Config
-    const supabaseUrl = 'https://uynntgocoxdrzdqumlwfe.supabase.co';
+    // Supabase Config - Replace with your valid Project URL and Anon Key
+    const supabaseUrl = 'https://uyntgocoxdrzdqumlwfe.supabase.co';
     const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5bnRnb2NveGRyemRxdW1sd2ZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzczMDMsImV4cCI6MjA3MDc1MzMwM30.xWK9IeeJcWqp-gaDR2yO_hqscAsVgbJQ5sxTo2AUvfU';
     const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
-
-    // State
-    let contacts = [];
-    let onboardingData = [];
-    let riskAppetiteReports = [];
-    let loading = true;
-    let error = null;
 
     // Helper to render questionnaire JSON
     function renderQuestionnaire(questionnaire) {
@@ -109,69 +102,40 @@ ${JSON.stringify(parsed, null, 2)}
 
     // Fetch data from Supabase and display
     async function fetchData() {
-      loading = true;
-      error = null;
+      // Show loading
       document.getElementById('data-sections').innerHTML = `
         <div class="w-full text-center text-lg text-gray-600 dark:text-gray-400" id="loading">
           <p>Loading...</p>
         </div>
       `;
-
       try {
-        // contacts
-        let { data: contactsData, error: contactsError } = await supabase
-          .from('contacts')
-          .select('*');
-        // onboarding_data
-        let { data: onboardingDataData, error: onboardingError } = await supabase
-          .from('onboarding_data')
-          .select('*');
-        // risk_appetite_reports
-        let { data: riskAppetiteData, error: riskAppetiteError } = await supabase
-          .from('risk_appetite_reports')
-          .select('*');
+        // Fetch all table data in parallel
+        const [contactsRes, onboardingRes, riskAppetiteRes] = await Promise.all([
+          supabase.from('contacts').select('*'),
+          supabase.from('onboarding_data').select('*'),
+          supabase.from('risk_appetite_reports').select('*')
+        ]);
 
-        if (contactsError) throw contactsError;
-        if (onboardingError) throw onboardingError;
-        if (riskAppetiteError) throw riskAppetiteError;
+        // Handle errors
+        if (contactsRes.error) throw new Error('Contacts: ' + contactsRes.error.message);
+        if (onboardingRes.error) throw new Error('Onboarding Data: ' + onboardingRes.error.message);
+        if (riskAppetiteRes.error) throw new Error('Risk Appetite Reports: ' + riskAppetiteRes.error.message);
 
-        contacts = contactsData || [];
-        onboardingData = onboardingDataData || [];
-        riskAppetiteReports = riskAppetiteData || [];
-
-        loading = false;
-        error = null;
-
-        renderAll();
-      } catch (err) {
-        loading = false;
-        error = 'Failed to fetch data. Please check your network and Supabase configuration.';
-        renderAll();
-      }
-    }
-
-    function renderAll() {
-      const section = document.getElementById('data-sections');
-      if (loading) {
-        section.innerHTML = `
-          <div class="w-full text-center text-lg text-gray-600 dark:text-gray-400">
-            <p>Loading...</p>
-          </div>
-        `;
-      } else if (error) {
-        section.innerHTML = `
-          <div class="w-full text-center text-lg text-red-500">
-            <p>${error}</p>
-          </div>
-        `;
-      } else {
-        section.innerHTML = `
-          ${renderCard('Contacts', contacts)}
-          ${renderCard('Onboarding Data', onboardingData)}
-          ${renderCard('Risk Appetite Reports', riskAppetiteReports, {
+        // Render cards
+        document.getElementById('data-sections').innerHTML = `
+          ${renderCard('Contacts', contactsRes.data || [])}
+          ${renderCard('Onboarding Data', onboardingRes.data || [])}
+          ${renderCard('Risk Appetite Reports', riskAppetiteRes.data || [], {
             special: { questionnaire: renderQuestionnaire }
           })}
         `;
+      } catch (err) {
+        document.getElementById('data-sections').innerHTML = `
+          <div class="w-full text-center text-lg text-red-500">
+            <p>Failed to fetch data.<br>${err.message}</p>
+          </div>
+        `;
+        console.error(err);
       }
     }
 
