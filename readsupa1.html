@@ -1,166 +1,185 @@
-import React, { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Supabase Data Reader</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Tailwind CDN for styling (Optional: Remove or replace if not needed) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase JS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body class="min-h-screen bg-gray-100 dark:bg-gray-900 font-sans p-4 sm:p-8 flex flex-col items-center">
 
-// The following variables are provided by the user.
-// In a real-world scenario, you should handle these securely.
-// Project URL is constructed from the Project ID.
-const supabaseUrl = 'https://uynntgocoxdrzdqumlwfe.supabase.co';
-// The 'anon' API key is used for client-side access.
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5bnRnb2NveGRyemRxdW1sd2ZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzczMDMsImV4cCI6MjA3MDc1MzMwM30.xWK9IeeJcWqp-gaDR2yO_hqscAsVgbJQ5sxTo2AUvfU';
+  <div class="w-full max-w-6xl">
+    <header class="text-center py-8">
+      <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white">
+        Supabase Data Reader
+      </h1>
+      <p class="mt-2 text-lg text-gray-600 dark:text-gray-400">
+        Fetching records from <code>contacts</code>, <code>onboarding_data</code>, and <code>risk_appetite_reports</code>
+      </p>
+    </header>
 
-// Initialize the Supabase client
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    <div id="data-sections" class="flex flex-col md:flex-row space-y-8 md:space-y-0 md:space-x-8">
+      <div class="w-full text-center text-lg text-gray-600 dark:text-gray-400" id="loading">
+        <p>Loading...</p>
+      </div>
+    </div>
 
-// Main App Component
-const App = () => {
-  // State for storing fetched data, loading status, and errors.
-  const [contacts, setContacts] = useState([]);
-  const [onboardingData, setOnboardingData] = useState([]);
-  const [riskAppetiteReports, setRiskAppetiteReports] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+    <div class="flex justify-center mt-8">
+      <button
+        id="refreshBtn"
+        class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-full shadow-lg hover:bg-blue-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+      >
+        Refresh Data
+      </button>
+    </div>
+  </div>
 
-  // Async function to fetch data from all three tables
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      // Fetch data from the 'contacts' table
-      const { data: contactsData, error: contactsError } = await supabase
-        .from('contacts')
-        .select('*');
+  <script>
+    // Supabase Config
+    const supabaseUrl = 'https://uynntgocoxdrzdqumlwfe.supabase.co';
+    const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5bnRnb2NveGRyemRxdW1sd2ZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzczMDMsImV4cCI6MjA3MDc1MzMwM30.xWK9IeeJcWqp-gaDR2yO_hqscAsVgbJQ5sxTo2AUvfU';
+    const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
 
-      // Fetch data from the 'onboarding_data' table
-      const { data: onboardingData, error: onboardingError } = await supabase
-        .from('onboarding_data')
-        .select('*');
+    // State
+    let contacts = [];
+    let onboardingData = [];
+    let riskAppetiteReports = [];
+    let loading = true;
+    let error = null;
 
-      // Fetch data from the 'risk_appetite_reports' table
-      const { data: riskAppetiteData, error: riskAppetiteError } = await supabase
-        .from('risk_appetite_reports')
-        .select('*');
-
-      // Handle any errors during fetching
-      if (contactsError) throw contactsError;
-      if (onboardingError) throw onboardingError;
-      if (riskAppetiteError) throw riskAppetiteError;
-
-      // Update the state with the fetched data
-      setContacts(contactsData);
-      setOnboardingData(onboardingData);
-      setRiskAppetiteReports(riskAppetiteData);
-
-    } catch (err) {
-      console.error('Error fetching data:', err);
-      setError('Failed to fetch data. Please check your network and Supabase configuration.');
-    } finally {
-      // Set loading to false regardless of success or failure
-      setLoading(false);
+    // Helper to render questionnaire JSON
+    function renderQuestionnaire(questionnaire) {
+      if (!questionnaire) return '';
+      let parsed;
+      try {
+        parsed = typeof questionnaire === 'string' ? JSON.parse(questionnaire) : questionnaire;
+      } catch (e) {
+        return '<span class="text-red-500">Invalid JSON</span>';
+      }
+      if (typeof parsed !== 'object' || parsed === null) return '';
+      return `
+        <pre class="bg-gray-200 dark:bg-gray-900 rounded p-2 overflow-x-auto text-xs mt-1">
+${JSON.stringify(parsed, null, 2)}
+        </pre>
+      `;
     }
-  };
 
-  // useEffect hook to call fetchData on component mount
-  useEffect(() => {
+    // Render a card
+    function renderCard(title, data, options = {}) {
+      let content = '';
+      if (data.length > 0) {
+        content = data.map(item => {
+          const props = Object.entries(item).map(([key, value]) => {
+            if (options.special && options.special[key]) {
+              return `
+                <div class="mb-2">
+                  <span class="font-medium capitalize text-gray-800 dark:text-gray-200">${key}:</span>
+                  ${options.special[key](value)}
+                </div>
+              `;
+            }
+            return `
+              <p class="text-sm text-gray-700 dark:text-gray-300">
+                <span class="font-medium capitalize text-gray-800 dark:text-gray-200">${key}:</span>
+                ${value !== null && typeof value === 'object'
+                  ? '<span class="italic text-gray-500">[object]</span>'
+                  : String(value)}
+              </p>
+            `;
+          }).join('');
+          return `
+            <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-xl border border-gray-100 dark:border-gray-600">
+              ${props}
+            </div>
+          `;
+        }).join('');
+      } else {
+        content = `<p class="text-center text-gray-500 dark:text-gray-400">No data available.</p>`;
+      }
+      return `
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 flex-1">
+          <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">${title}</h3>
+          <div class="space-y-4">${content}</div>
+        </div>
+      `;
+    }
+
+    // Fetch data from Supabase and display
+    async function fetchData() {
+      loading = true;
+      error = null;
+      document.getElementById('data-sections').innerHTML = `
+        <div class="w-full text-center text-lg text-gray-600 dark:text-gray-400" id="loading">
+          <p>Loading...</p>
+        </div>
+      `;
+
+      try {
+        // contacts
+        let { data: contactsData, error: contactsError } = await supabase
+          .from('contacts')
+          .select('*');
+        // onboarding_data
+        let { data: onboardingDataData, error: onboardingError } = await supabase
+          .from('onboarding_data')
+          .select('*');
+        // risk_appetite_reports
+        let { data: riskAppetiteData, error: riskAppetiteError } = await supabase
+          .from('risk_appetite_reports')
+          .select('*');
+
+        if (contactsError) throw contactsError;
+        if (onboardingError) throw onboardingError;
+        if (riskAppetiteError) throw riskAppetiteError;
+
+        contacts = contactsData || [];
+        onboardingData = onboardingDataData || [];
+        riskAppetiteReports = riskAppetiteData || [];
+
+        loading = false;
+        error = null;
+
+        renderAll();
+      } catch (err) {
+        loading = false;
+        error = 'Failed to fetch data. Please check your network and Supabase configuration.';
+        renderAll();
+      }
+    }
+
+    function renderAll() {
+      const section = document.getElementById('data-sections');
+      if (loading) {
+        section.innerHTML = `
+          <div class="w-full text-center text-lg text-gray-600 dark:text-gray-400">
+            <p>Loading...</p>
+          </div>
+        `;
+      } else if (error) {
+        section.innerHTML = `
+          <div class="w-full text-center text-lg text-red-500">
+            <p>${error}</p>
+          </div>
+        `;
+      } else {
+        section.innerHTML = `
+          ${renderCard('Contacts', contacts)}
+          ${renderCard('Onboarding Data', onboardingData)}
+          ${renderCard('Risk Appetite Reports', riskAppetiteReports, {
+            special: { questionnaire: renderQuestionnaire }
+          })}
+        `;
+      }
+    }
+
+    // Add event listeners
+    document.getElementById('refreshBtn').addEventListener('click', fetchData);
+
+    // Initial load
     fetchData();
-  }, []); // The empty dependency array ensures this runs only once
-
-  // Custom renderer for questionnaire (jsonb) field in risk_appetite_reports
-  const renderQuestionnaire = (questionnaire) => {
-    if (!questionnaire) return null;
-    let parsed;
-    try {
-      parsed = typeof questionnaire === 'string' ? JSON.parse(questionnaire) : questionnaire;
-    } catch (e) {
-      return <span className="text-red-500">Invalid JSON</span>;
-    }
-    if (typeof parsed !== 'object' || parsed === null) return <span />;
-    return (
-      <pre className="bg-gray-200 dark:bg-gray-900 rounded p-2 overflow-x-auto text-xs mt-1">
-        {JSON.stringify(parsed, null, 2)}
-      </pre>
-    );
-  };
-
-  // Function to render a single data card
-  const renderCard = (title, data, options = {}) => (
-    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 flex-1">
-      <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">{title}</h3>
-      <div className="space-y-4">
-        {data.length > 0 ? (
-          data.map((item, index) => (
-            <div key={index} className="bg-gray-50 dark:bg-gray-700 p-4 rounded-xl border border-gray-100 dark:border-gray-600">
-              {Object.entries(item).map(([key, value]) => {
-                if (options.special && options.special[key]) {
-                  return (
-                    <div key={key} className="mb-2">
-                      <span className="font-medium capitalize text-gray-800 dark:text-gray-200">{key}:</span>
-                      {options.special[key](value)}
-                    </div>
-                  );
-                }
-                return (
-                  <p key={key} className="text-sm text-gray-700 dark:text-gray-300">
-                    <span className="font-medium capitalize text-gray-800 dark:text-gray-200">{key}:</span>{' '}
-                    {value !== null && typeof value === 'object'
-                      ? <span className="italic text-gray-500">[object]</span>
-                      : String(value)}
-                  </p>
-                );
-              })}
-            </div>
-          ))
-        ) : (
-          <p className="text-center text-gray-500 dark:text-gray-400">No data available.</p>
-        )}
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 font-sans p-4 sm:p-8 flex flex-col items-center">
-      <div className="w-full max-w-6xl">
-        <header className="text-center py-8">
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white">
-            Supabase Data Reader
-          </h1>
-          <p className="mt-2 text-lg text-gray-600 dark:text-gray-400">
-            Fetching records from <code>contacts</code>, <code>onboarding_data</code>, and <code>risk_appetite_reports</code>
-          </p>
-        </header>
-
-        <div className="flex flex-col md:flex-row space-y-8 md:space-y-0 md:space-x-8">
-          {loading ? (
-            <div className="w-full text-center text-lg text-gray-600 dark:text-gray-400">
-              <p>Loading...</p>
-            </div>
-          ) : error ? (
-            <div className="w-full text-center text-lg text-red-500">
-              <p>{error}</p>
-            </div>
-          ) : (
-            <>
-              {renderCard('Contacts', contacts)}
-              {renderCard('Onboarding Data', onboardingData)}
-              {renderCard('Risk Appetite Reports', riskAppetiteReports, {
-                special: {
-                  questionnaire: renderQuestionnaire
-                }
-              })}
-            </>
-          )}
-        </div>
-
-        <div className="flex justify-center mt-8">
-            <button
-              onClick={fetchData}
-              className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-full shadow-lg hover:bg-blue-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Refresh Data
-            </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default App;
+  </script>
+</body>
+</html>
