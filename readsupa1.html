@@ -38,10 +38,21 @@
   </div>
 
   <script>
-    // Supabase Config - Replace with your valid Project URL and Anon Key
+    // Supabase Config
     const supabaseUrl = 'https://uyntgocoxdrzdqumlwfe.supabase.co';
     const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5bnRnb2NveGRyemRxdW1sd2ZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzczMDMsImV4cCI6MjA3MDc1MzMwM30.xWK9IeeJcWqp-gaDR2yO_hqscAsVgbJQ5sxTo2AUvfU';
     const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+    // Try to guess the best column for ordering
+    function getOrderColumn(data) {
+      if (!data || data.length === 0) return null;
+      const sample = data[0];
+      if ('created_at' in sample) return 'created_at';
+      if ('timestamp' in sample) return 'timestamp';
+      if ('id' in sample) return 'id';
+      // fallback: pick the first property
+      return Object.keys(sample)[0];
+    }
 
     // Helper to render questionnaire JSON
     function renderQuestionnaire(questionnaire) {
@@ -60,11 +71,15 @@ ${JSON.stringify(parsed, null, 2)}
       `;
     }
 
-    // Render a card
+    // Render a card with latest row highlighted
     function renderCard(title, data, options = {}) {
       let content = '';
       if (data.length > 0) {
-        content = data.map(item => {
+        content = data.map((item, idx) => {
+          const isLatest = idx === 0;
+          const highlight = isLatest
+            ? 'border-2 border-blue-500 bg-blue-100 dark:bg-blue-900'
+            : 'border border-gray-100 dark:border-gray-600';
           const props = Object.entries(item).map(([key, value]) => {
             if (options.special && options.special[key]) {
               return `
@@ -84,7 +99,8 @@ ${JSON.stringify(parsed, null, 2)}
             `;
           }).join('');
           return `
-            <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-xl border border-gray-100 dark:border-gray-600">
+            <div class="p-4 rounded-xl ${highlight} mb-2">
+              ${isLatest ? `<span class="inline-block mb-2 px-2 py-1 bg-blue-500 text-white text-xs rounded">Latest</span>` : ''}
               ${props}
             </div>
           `;
@@ -100,32 +116,48 @@ ${JSON.stringify(parsed, null, 2)}
       `;
     }
 
-    // Fetch data from Supabase and display
+    // Try to get table data ordered by most recent, using best effort for order column
+    async function fetchOrderedTable(tableName) {
+      // First, get a sample row to guess order column
+      let { data: sampleData, error: sampleErr } = await supabase
+        .from(tableName)
+        .select('*')
+        .limit(1);
+      if (sampleErr) throw sampleErr;
+      const orderCol = getOrderColumn(sampleData || []);
+      // Default: show as is if no orderCol found
+      if (!orderCol) {
+        let { data, error } = await supabase.from(tableName).select('*');
+        if (error) throw error;
+        return data || [];
+      }
+      // Try to order descending (latest first)
+      let { data, error } = await supabase
+        .from(tableName)
+        .select('*')
+        .order(orderCol, { ascending: false });
+      if (error) throw error;
+      return data || [];
+    }
+
+    // Fetch and render all tables
     async function fetchData() {
-      // Show loading
       document.getElementById('data-sections').innerHTML = `
         <div class="w-full text-center text-lg text-gray-600 dark:text-gray-400" id="loading">
           <p>Loading...</p>
         </div>
       `;
       try {
-        // Fetch all table data in parallel
-        const [contactsRes, onboardingRes, riskAppetiteRes] = await Promise.all([
-          supabase.from('contacts').select('*'),
-          supabase.from('onboarding_data').select('*'),
-          supabase.from('risk_appetite_reports').select('*')
+        // Fetch with latest first and highlight
+        const [contacts, onboarding, riskAppetite] = await Promise.all([
+          fetchOrderedTable('contacts'),
+          fetchOrderedTable('onboarding_data'),
+          fetchOrderedTable('risk_appetite_reports')
         ]);
-
-        // Handle errors
-        if (contactsRes.error) throw new Error('Contacts: ' + contactsRes.error.message);
-        if (onboardingRes.error) throw new Error('Onboarding Data: ' + onboardingRes.error.message);
-        if (riskAppetiteRes.error) throw new Error('Risk Appetite Reports: ' + riskAppetiteRes.error.message);
-
-        // Render cards
         document.getElementById('data-sections').innerHTML = `
-          ${renderCard('Contacts', contactsRes.data || [])}
-          ${renderCard('Onboarding Data', onboardingRes.data || [])}
-          ${renderCard('Risk Appetite Reports', riskAppetiteRes.data || [], {
+          ${renderCard('Contacts', contacts)}
+          ${renderCard('Onboarding Data', onboarding)}
+          ${renderCard('Risk Appetite Reports', riskAppetite, {
             special: { questionnaire: renderQuestionnaire }
           })}
         `;
@@ -139,7 +171,6 @@ ${JSON.stringify(parsed, null, 2)}
       }
     }
 
-    // Add event listeners
     document.getElementById('refreshBtn').addEventListener('click', fetchData);
 
     // Initial load
