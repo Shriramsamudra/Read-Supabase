@@ -1,228 +1,180 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Supabase Data Reader</title>
-    <!-- Use Tailwind CSS CDN for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Load React, ReactDOM, and Supabase libraries -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@supabase/supabase-js@2.39.0"></script>
-    <!-- Load Babel for JSX support -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
-        .dark {
-            color-scheme: dark;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Supabase Data Reader</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Tailwind CDN for styling (for quick demo, use PostCSS or CLI for production) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase JS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white transition-colors duration-300">
+<body class="min-h-screen bg-gray-100 dark:bg-gray-900 font-sans p-4 sm:p-8 flex flex-col items-center">
 
-    <div id="app" class="min-h-screen flex flex-col items-center p-4 sm:p-8">
-        <!-- The React app will be rendered into this div -->
+  <div class="w-full max-w-6xl">
+    <header class="text-center py-8">
+      <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white">
+        Supabase Data Reader
+      </h1>
+      <p class="mt-2 text-lg text-gray-600 dark:text-gray-400">
+        Fetching records from <code>contacts</code>, <code>onboarding_data</code>, and <code>risk_appetite_reports</code>
+      </p>
+    </header>
+
+    <div id="data-sections" class="flex flex-col md:flex-row space-y-8 md:space-y-0 md:space-x-8">
+      <div class="w-full text-center text-lg text-gray-600 dark:text-gray-400" id="loading">
+        <p>Loading...</p>
+      </div>
     </div>
 
-    <!-- The script tag with type="text/babel" tells the browser to use Babel to compile the JSX -->
-    <script type="text/babel">
-        // Use the globally available libraries loaded from the HTML script tags
-        const { createClient } = supabase;
-        const { useState, useEffect } = React;
-        const { createRoot } = ReactDOM;
+    <div class="flex justify-center mt-8">
+      <button
+        id="refreshBtn"
+        class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-full shadow-lg hover:bg-blue-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+      >
+        Refresh Data
+      </button>
+    </div>
+  </div>
 
-        // Supabase configuration from the user
-        // The URL has been corrected to ensure it includes the correct protocol and domain.
-        const supabaseUrl = 'https://uyntgocoxdrzdqumlwfe.supabase.co';
-        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5bnRnb2NveGRyemRxdW1sd2ZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzczMDMsImV4cCI6MjA3MDc1MzMwM30.xWK9IeeJcWqp-gaDR2yO_hqscAsVgbJQ5sxTo2AUvfU';
-        
-        // Initialize the Supabase client
-        const client = createClient(supabaseUrl, supabaseAnonKey);
+  <script>
+    // Supabase Config
+    const supabaseUrl = 'https://uyntgocoxdrzdqumlwfe.supabase.co';
+    const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5bnRnb2NveGRyemRxdW1sd2ZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzczMDMsImV4cCI6MjA3MDc1MzMwM30.xWK9IeeJcWqp-gaDR2yO_hqscAsVgbJQ5sxTo2AUvfU';
+    const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
 
-        // A simple React Error Boundary component to catch rendering errors
-        class ErrorBoundary extends React.Component {
-            constructor(props) {
-                super(props);
-                this.state = { hasError: false, error: null };
-            }
+    // Try to guess the best column for ordering
+    function getOrderColumn(data) {
+      if (!data || data.length === 0) return null;
+      const sample = data[0];
+      if ('created_at' in sample) return 'created_at';
+      if ('timestamp' in sample) return 'timestamp';
+      if ('id' in sample) return 'id';
+      // fallback: pick the first property
+      return Object.keys(sample)[0];
+    }
 
-            static getDerivedStateFromError(error) {
-                return { hasError: true, error: error.message };
-            }
+    // Helper to render questionnaire JSON
+    function renderQuestionnaire(questionnaire) {
+      if (!questionnaire) return '';
+      let parsed;
+      try {
+        parsed = typeof questionnaire === 'string' ? JSON.parse(questionnaire) : questionnaire;
+      } catch (e) {
+        return '<span class="text-red-500">Invalid JSON</span>';
+      }
+      if (typeof parsed !== 'object' || parsed === null) return '';
+      return `
+        <pre class="bg-gray-200 dark:bg-gray-900 rounded p-2 overflow-x-auto text-xs mt-1">
+${JSON.stringify(parsed, null, 2)}
+        </pre>
+      `;
+    }
 
-            componentDidCatch(error, errorInfo) {
-                // Log the error to the console for debugging
-                console.error("Uncaught React error:", error, errorInfo);
-            }
-
-            render() {
-                if (this.state.hasError) {
-                    return (
-                        <div className="flex flex-col items-center justify-center p-8 text-center text-red-500">
-                            <h2 className="text-xl font-bold mb-4">Something went wrong.</h2>
-                            <p className="font-mono text-sm break-all">{this.state.error}</p>
-                            <p className="mt-4">Please check the browser console for more details.</p>
-                        </div>
-                    );
-                }
-
-                return this.props.children;
-            }
-        }
-
-        // The main React application component
-        const App = () => {
-            // State to hold the fetched data
-            const [contacts, setContacts] = useState([]);
-            const [onboardingData, setOnboardingData] = useState([]);
-            // State for managing loading and errors
-            const [loading, setLoading] = useState(true);
-            const [error, setError] = useState(null);
-
-            // Function to fetch data from Supabase
-            const fetchData = async () => {
-                try {
-                    setLoading(true);
-                    setError(null);
-                    
-                    // Fetch data from the 'contacts' table
-                    const { data: contactsData, error: contactsError } = await client
-                        .from('contacts')
-                        .select('*');
-
-                    // Fetch data from the 'onboarding_data' table
-                    const { data: onboardingData, error: onboardingError } = await client
-                        .from('onboarding_data')
-                        .select('*');
-
-                    // Handle any potential errors from the fetches
-                    if (contactsError) throw contactsError;
-                    if (onboardingError) throw onboardingError;
-
-                    // Sort the data to find the latest entry
-                    const sortedContacts = [...contactsData].sort((a, b) => {
-                      if (a.created_at && b.created_at) {
-                        return new Date(b.created_at) - new Date(a.created_at);
-                      }
-                      return b.id - a.id;
-                    });
-                    const sortedOnboarding = [...onboardingData].sort((a, b) => {
-                       if (a.created_at && b.created_at) {
-                        return new Date(b.created_at) - new Date(a.created_at);
-                      }
-                      return b.id - a.id;
-                    });
-
-
-                    // Update state with the fetched data
-                    setContacts(sortedContacts);
-                    setOnboardingData(sortedOnboarding);
-
-                } catch (err) {
-                    console.error('Error fetching data:', err);
-                    // Check if the error is a network error
-                    if (err.message && err.message.includes('Failed to fetch')) {
-                        setError('Failed to connect to the Supabase database. Please check your network connection.');
-                    } else {
-                        // Set a user-friendly error message
-                        setError('Failed to fetch data. This is likely due to a Row Level Security (RLS) policy. Please check the browser console for more details.');
-                    }
-                } finally {
-                    // Set loading to false regardless of success or failure
-                    setLoading(false);
-                }
-            };
-
-            // useEffect hook to fetch data when the component first mounts
-            useEffect(() => {
-                fetchData();
-            }, []);
-
-            // Helper function to render data cards with a highlight for the latest entry
-            const renderCard = (title, data) => (
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 w-full">
-                    <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">{title}</h3>
-                    <div className="space-y-4">
-                        {data.length > 0 ? (
-                            data.map((item, index) => {
-                                const isLatest = index === 0;
-                                return (
-                                    <div 
-                                        key={item.id || index} 
-                                        className={`p-4 rounded-xl border border-gray-100 dark:border-gray-600 transition-all duration-300
-                                                    ${isLatest ? 'bg-blue-100 dark:bg-blue-900 shadow-md transform scale-[1.02] border-blue-400 dark:border-blue-600' : 'bg-gray-50 dark:bg-gray-700'}`}
-                                    >
-                                        {Object.entries(item).map(([key, value]) => (
-                                            <p key={key} className="text-sm text-gray-700 dark:text-gray-300">
-                                                <span className="font-medium capitalize text-gray-800 dark:text-gray-200">{key}:</span> {value}
-                                            </p>
-                                        ))}
-                                    </div>
-                                );
-                            })
-                        ) : (
-                            <p className="text-center text-gray-500 dark:text-gray-400">No data available.</p>
-                        )}
-                    </div>
+    // Render a card with latest row highlighted
+    function renderCard(title, data, options = {}) {
+      let content = '';
+      if (data.length > 0) {
+        content = data.map((item, idx) => {
+          const isLatest = idx === 0;
+          const highlight = isLatest
+            ? 'border-2 border-blue-500 bg-blue-100 dark:bg-blue-900'
+            : 'border border-gray-100 dark:border-gray-600';
+          const props = Object.entries(item).map(([key, value]) => {
+            if (options.special && options.special[key]) {
+              return `
+                <div class="mb-2">
+                  <span class="font-medium capitalize text-gray-800 dark:text-gray-200">${key}:</span>
+                  ${options.special[key](value)}
                 </div>
-            );
+              `;
+            }
+            return `
+              <p class="text-sm text-gray-700 dark:text-gray-300">
+                <span class="font-medium capitalize text-gray-800 dark:text-gray-200">${key}:</span>
+                ${value !== null && typeof value === 'object'
+                  ? '<span class="italic text-gray-500">[object]</span>'
+                  : String(value)}
+              </p>
+            `;
+          }).join('');
+          return `
+            <div class="p-4 rounded-xl ${highlight} mb-2">
+              ${isLatest ? `<span class="inline-block mb-2 px-2 py-1 bg-blue-500 text-white text-xs rounded">Latest</span>` : ''}
+              ${props}
+            </div>
+          `;
+        }).join('');
+      } else {
+        content = `<p class="text-center text-gray-500 dark:text-gray-400">No data available.</p>`;
+      }
+      return `
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 flex-1">
+          <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">${title}</h3>
+          <div class="space-y-4">${content}</div>
+        </div>
+      `;
+    }
 
-            // Render the main UI
-            return (
-                <div className="w-full max-w-6xl">
-                    <header className="text-center py-8">
-                        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white">
-                            Supabase Data Reader
-                        </h1>
-                        <p className="mt-2 text-lg text-gray-600 dark:text-gray-400">
-                            Fetching records from `contacts` and `onboarding_data`
-                        </p>
-                    </header>
+    // Try to get table data ordered by most recent, using best effort for order column
+    async function fetchOrderedTable(tableName) {
+      // First, get a sample row to guess order column
+      let { data: sampleData, error: sampleErr } = await supabase
+        .from(tableName)
+        .select('*')
+        .limit(1);
+      if (sampleErr) throw sampleErr;
+      const orderCol = getOrderColumn(sampleData || []);
+      // Default: show as is if no orderCol found
+      if (!orderCol) {
+        let { data, error } = await supabase.from(tableName).select('*');
+        if (error) throw error;
+        return data || [];
+      }
+      // Try to order descending (latest first)
+      let { data, error } = await supabase
+        .from(tableName)
+        .select('*')
+        .order(orderCol, { ascending: false });
+      if (error) throw error;
+      return data || [];
+    }
 
-                    <div className="flex flex-col md:flex-row space-y-8 md:space-y-0 md:space-x-8">
-                        {loading ? (
-                            <div className="w-full text-center text-lg text-gray-600 dark:text-gray-400">
-                                <p>Loading...</p>
-                            </div>
-                        ) : error ? (
-                            <div className="w-full text-center text-lg text-red-500">
-                                <p>{error}</p>
-                            </div>
-                        ) : (
-                            <>
-                                {renderCard('Contacts', contacts)}
-                                {renderCard('Onboarding Data', onboardingData)}
-                            </>
-                        )}
-                    </div>
+    // Fetch and render all tables
+    async function fetchData() {
+      document.getElementById('data-sections').innerHTML = `
+        <div class="w-full text-center text-lg text-gray-600 dark:text-gray-400" id="loading">
+          <p>Loading...</p>
+        </div>
+      `;
+      try {
+        // Fetch with latest first and highlight
+        const [contacts, onboarding, riskAppetite] = await Promise.all([
+          fetchOrderedTable('contacts'),
+          fetchOrderedTable('onboarding_data'),
+          fetchOrderedTable('risk_appetite_reports')
+        ]);
+        document.getElementById('data-sections').innerHTML = `
+          ${renderCard('Contacts', contacts)}
+          ${renderCard('Onboarding Data', onboarding)}
+          ${renderCard('Risk Appetite Reports', riskAppetite, {
+            special: { questionnaire: renderQuestionnaire }
+          })}
+        `;
+      } catch (err) {
+        document.getElementById('data-sections').innerHTML = `
+          <div class="w-full text-center text-lg text-red-500">
+            <p>Failed to fetch data.<br>${err.message}</p>
+          </div>
+        `;
+        console.error(err);
+      }
+    }
 
-                    <div className="flex justify-center mt-8">
-                        <button
-                            onClick={fetchData}
-                            className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-full shadow-lg hover:bg-blue-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                        >
-                            Refresh Data
-                        </button>
-                    </div>
-                </div>
-            );
-        };
+    document.getElementById('refreshBtn').addEventListener('click', fetchData);
 
-        // Find the root element and render the application
-        const container = document.getElementById('app');
-        const root = createRoot(container);
-        
-        root.render(
-            <ErrorBoundary>
-                <App />
-            </ErrorBoundary>
-        );
-    </script>
+    // Initial load
+    fetchData();
+  </script>
 </body>
 </html>
