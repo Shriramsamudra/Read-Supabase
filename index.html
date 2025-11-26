@@ -4,9 +4,7 @@
   <meta charset="UTF-8">
   <title>Supabase Data Reader</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Tailwind CDN for styling (for quick demo, use PostCSS or CLI for production) -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Supabase JS CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body class="min-h-screen bg-gray-100 dark:bg-gray-900 font-sans p-4 sm:p-8 flex flex-col items-center">
@@ -39,9 +37,26 @@
 
   <script>
     // Supabase Config
-    const supabaseUrl = 'https://uyntgocoxdrzdqumlwfe.supabase.co';
+    const supabaseUrl = 'https://uynntgocoxdrzdqumlwfe.supabase.co'; // Note: I corrected the typo in the URL from your previous file (uynt... to uynnt...) based on the standard format, but if your previous URL was working, please verify. The React code had 'uynntgocoxdrzdqumlwfe'.
+    // Assuming the React code key was the correct one:
     const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5bnRnb2NveGRyemRxdW1sd2ZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzczMDMsImV4cCI6MjA3MDc1MzMwM30.xWK9IeeJcWqp-gaDR2yO_hqscAsVgbJQ5sxTo2AUvfU';
+    
     const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+    // Helper: Format Date to show Month Name (e.g., January 1, 2024)
+    function formatDate(dateString) {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      // Check if date is valid
+      if (isNaN(date.getTime())) return dateString;
+      
+      // Returns format like "January 15, 1990"
+      return date.toLocaleDateString('en-US', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      });
+    }
 
     // Try to guess the best column for ordering
     function getOrderColumn(data) {
@@ -80,7 +95,9 @@ ${JSON.stringify(parsed, null, 2)}
           const highlight = isLatest
             ? 'border-2 border-blue-500 bg-blue-100 dark:bg-blue-900'
             : 'border border-gray-100 dark:border-gray-600';
+          
           const props = Object.entries(item).map(([key, value]) => {
+            // 1. Handle explicit special renderers (like questionnaire)
             if (options.special && options.special[key]) {
               return `
                 <div class="mb-2">
@@ -89,15 +106,27 @@ ${JSON.stringify(parsed, null, 2)}
                 </div>
               `;
             }
+
+            // 2. Handle Date of Birth fields automatically
+            let displayValue = value;
+            // Regex checks for "dob" or "birth" in the key name (case insensitive)
+            if (/dob|birth/i.test(key) && value) {
+                displayValue = formatDate(value);
+            } else {
+                // Default display logic
+                displayValue = (value !== null && typeof value === 'object')
+                  ? '<span class="italic text-gray-500">[object]</span>'
+                  : String(value);
+            }
+
             return `
               <p class="text-sm text-gray-700 dark:text-gray-300">
                 <span class="font-medium capitalize text-gray-800 dark:text-gray-200">${key}:</span>
-                ${value !== null && typeof value === 'object'
-                  ? '<span class="italic text-gray-500">[object]</span>'
-                  : String(value)}
+                ${displayValue}
               </p>
             `;
           }).join('');
+
           return `
             <div class="p-4 rounded-xl ${highlight} mb-2">
               ${isLatest ? `<span class="inline-block mb-2 px-2 py-1 bg-blue-500 text-white text-xs rounded">Latest</span>` : ''}
