@@ -36,21 +36,17 @@
   </div>
 
   <script>
-    // Supabase Config
-    // CORRECTED URL: removed the extra 'n' found in the React file
+    // 1. Rename the constant to 'supabaseClient' to avoid conflict with 'window.supabase'
     const supabaseUrl = 'https://uyntgocoxdrzdqumlwfe.supabase.co';
     const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5bnRnb2NveGRyemRxdW1sd2ZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzczMDMsImV4cCI6MjA3MDc1MzMwM30.xWK9IeeJcWqp-gaDR2yO_hqscAsVgbJQ5sxTo2AUvfU';
     
-    const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+    // Initializing the client with a unique name
+    const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
 
-    // Helper: Format Date to show Month Name (e.g., January 1, 2024)
     function formatDate(dateString) {
       if (!dateString) return '';
       const date = new Date(dateString);
-      // Check if date is valid
       if (isNaN(date.getTime())) return dateString;
-      
-      // Returns format like "January 15, 1990"
       return date.toLocaleDateString('en-US', {
         day: 'numeric',
         month: 'long',
@@ -58,18 +54,15 @@
       });
     }
 
-    // Try to guess the best column for ordering
     function getOrderColumn(data) {
       if (!data || data.length === 0) return null;
       const sample = data[0];
       if ('created_at' in sample) return 'created_at';
       if ('timestamp' in sample) return 'timestamp';
       if ('id' in sample) return 'id';
-      // fallback: pick the first property
       return Object.keys(sample)[0];
     }
 
-    // Helper to render questionnaire JSON
     function renderQuestionnaire(questionnaire) {
       if (!questionnaire) return '';
       let parsed;
@@ -80,129 +73,122 @@
       }
       if (typeof parsed !== 'object' || parsed === null) return '';
       return `
-        <pre class="bg-gray-200 dark:bg-gray-900 rounded p-2 overflow-x-auto text-xs mt-1">
+        <pre class="bg-gray-200 dark:bg-gray-900 rounded p-2 overflow-x-auto text-xs mt-1 text-gray-800 dark:text-gray-200">
 ${JSON.stringify(parsed, null, 2)}
         </pre>
       `;
     }
 
-    // Render a card with latest row highlighted
     function renderCard(title, data, options = {}) {
       let content = '';
-      if (data.length > 0) {
+      if (data && data.length > 0) {
         content = data.map((item, idx) => {
           const isLatest = idx === 0;
           const highlight = isLatest
-            ? 'border-2 border-blue-500 bg-blue-100 dark:bg-blue-900'
-            : 'border border-gray-100 dark:border-gray-600';
+            ? 'border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+            : 'border border-gray-100 dark:border-gray-700';
           
           const props = Object.entries(item).map(([key, value]) => {
-            // 1. Handle explicit special renderers (like questionnaire)
             if (options.special && options.special[key]) {
               return `
                 <div class="mb-2">
-                  <span class="font-medium capitalize text-gray-800 dark:text-gray-200">${key}:</span>
+                  <span class="font-bold capitalize text-gray-800 dark:text-gray-200">${key.replace(/_/g, ' ')}:</span>
                   ${options.special[key](value)}
                 </div>
               `;
             }
 
-            // 2. Handle Date of Birth fields automatically
             let displayValue = value;
-            // Regex checks for "dob" or "birth" in the key name (case insensitive)
-            if (/dob|birth/i.test(key) && value) {
+            if (/dob|birth|date/i.test(key) && value && typeof value === 'string') {
                 displayValue = formatDate(value);
-            } else {
-                // Default display logic
-                displayValue = (value !== null && typeof value === 'object')
-                  ? '<span class="italic text-gray-500">[object]</span>'
-                  : String(value);
+            } else if (value !== null && typeof value === 'object') {
+                displayValue = '<span class="italic text-gray-500">[Object]</span>';
+            } else if (value === null) {
+                displayValue = '<span class="text-gray-400">N/A</span>';
             }
 
             return `
-              <p class="text-sm text-gray-700 dark:text-gray-300">
-                <span class="font-medium capitalize text-gray-800 dark:text-gray-200">${key}:</span>
+              <p class="text-sm text-gray-700 dark:text-gray-300 mb-1">
+                <span class="font-bold capitalize text-gray-800 dark:text-gray-200">${key.replace(/_/g, ' ')}:</span>
                 ${displayValue}
               </p>
             `;
           }).join('');
 
           return `
-            <div class="p-4 rounded-xl ${highlight} mb-2">
-              ${isLatest ? `<span class="inline-block mb-2 px-2 py-1 bg-blue-500 text-white text-xs rounded">Latest</span>` : ''}
+            <div class="p-4 rounded-xl ${highlight} mb-4">
+              ${isLatest ? `<span class="inline-block mb-2 px-2 py-0.5 bg-blue-500 text-white text-[10px] uppercase font-bold rounded">Latest Entry</span>` : ''}
               ${props}
             </div>
           `;
         }).join('');
       } else {
-        content = `<p class="text-center text-gray-500 dark:text-gray-400">No data available.</p>`;
+        content = `<p class="text-center text-gray-500 dark:text-gray-400">No data available in this table.</p>`;
       }
       return `
         <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 flex-1">
-          <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">${title}</h3>
-          <div class="space-y-4">${content}</div>
+          <h3 class="text-xl font-bold mb-4 text-gray-900 dark:text-white border-b pb-2">${title}</h3>
+          <div class="max-h-[600px] overflow-y-auto pr-2">${content}</div>
         </div>
       `;
     }
 
-    // Try to get table data ordered by most recent, using best effort for order column
     async function fetchOrderedTable(tableName) {
-      // First, get a sample row to guess order column
-      let { data: sampleData, error: sampleErr } = await supabase
+      // Use the new variable name 'supabaseClient'
+      let { data: sampleData, error: sampleErr } = await supabaseClient
         .from(tableName)
         .select('*')
         .limit(1);
+      
       if (sampleErr) throw sampleErr;
+      
       const orderCol = getOrderColumn(sampleData || []);
-      // Default: show as is if no orderCol found
-      if (!orderCol) {
-        let { data, error } = await supabase.from(tableName).select('*');
-        if (error) throw error;
-        return data || [];
+      
+      let query = supabaseClient.from(tableName).select('*');
+      if (orderCol) {
+        query = query.order(orderCol, { ascending: false });
       }
-      // Try to order descending (latest first)
-      let { data, error } = await supabase
-        .from(tableName)
-        .select('*')
-        .order(orderCol, { ascending: false });
+      
+      let { data, error } = await query;
       if (error) throw error;
       return data || [];
     }
 
-    // Fetch and render all tables
     async function fetchData() {
-      document.getElementById('data-sections').innerHTML = `
-        <div class="w-full text-center text-lg text-gray-600 dark:text-gray-400" id="loading">
-          <p>Loading...</p>
+      const container = document.getElementById('data-sections');
+      container.innerHTML = `
+        <div class="w-full text-center py-10 text-lg text-gray-600 dark:text-gray-400">
+          <p class="animate-pulse">Fetching latest data from Supabase...</p>
         </div>
       `;
+      
       try {
-        // Fetch with latest first and highlight
         const [contacts, onboarding, riskAppetite] = await Promise.all([
           fetchOrderedTable('contacts'),
           fetchOrderedTable('onboarding_data'),
           fetchOrderedTable('risk_appetite_reports')
         ]);
-        document.getElementById('data-sections').innerHTML = `
+        
+        container.innerHTML = `
           ${renderCard('Contacts', contacts)}
           ${renderCard('Onboarding Data', onboarding)}
-          ${renderCard('Risk Appetite Reports', riskAppetite, {
+          ${renderCard('Risk appetite Reports', riskAppetite, {
             special: { questionnaire: renderQuestionnaire }
           })}
         `;
       } catch (err) {
-        document.getElementById('data-sections').innerHTML = `
-          <div class="w-full text-center text-lg text-red-500">
-            <p>Failed to fetch data.<br>${err.message}</p>
+        container.innerHTML = `
+          <div class="w-full p-6 bg-red-50 border border-red-200 rounded-lg text-center text-red-600">
+            <h4 class="font-bold">Database Error</h4>
+            <p>${err.message}</p>
+            <p class="text-xs mt-2 text-red-400">Check if the tables exist and RLS policies allow anonymous reads.</p>
           </div>
         `;
-        console.error(err);
+        console.error("Fetch Error:", err);
       }
     }
 
     document.getElementById('refreshBtn').addEventListener('click', fetchData);
-
-    // Initial load
     fetchData();
   </script>
 </body>
